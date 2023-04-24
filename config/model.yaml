@@ -1,0 +1,82 @@
+
+model_selection:
+    model: 
+      Ridge:
+        search_param_grid:
+          alpha:
+           - 0.001
+           - 0.01
+           - 0.1
+           - 1
+           - 10
+           - 100
+           - 1000
+
+      RandomForestRegressor:
+        search_param_grid:
+          n_estimators:
+           - 10 
+           - 20
+           - 50 
+           - 100 
+           - 130 
+          max_depth:
+           - 10
+           - 20
+           - 30
+           - 40
+           - 50
+          max_features:
+           - 'auto'
+           - 'sqrt'
+          min_samples_split:
+           - 2
+           - 6
+           - 10
+          bootstrap:
+           - True
+           - False
+           
+      DecisionTreeRegressor:
+        search_param_grid:
+          criterion: 
+           - "mse"
+           - "friedman_mse" 
+           - "mae"
+          splitter: 
+           - "best" 
+           - "random"
+          max_features: 
+           - "auto" 
+           - "sqrt" 
+           - "log2"
+          max_depth: 
+           - 2
+           - 4
+           - 6
+           - 8
+           - 10
+           - 12
+           - 14
+           - 16
+          min_samples_split: 
+           - 2
+           - 4
+           - 6
+           - 8
+           - 10
+           - 12
+           - 14
+           - 16
+      
+
+          
+    
+
+
+
+           
+
+
+
+      
