@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pandas as pd
 from pymongo import MongoClient
-
+from zipfile import Path
 from src.constant import *
 from src.entity.config_entity import DataIngestionConfig
 from src.entity.artifact_entity import DataIngestionArtifact
@@ -81,7 +81,7 @@ class DataIngestion:
         except Exception as e:
             raise VisibilityException(e,sys)
 
-    def initiate_data_ingestion(self) -> DataIngestionArtifact:
+    def initiate_data_ingestion(self) -> Path:
         """
             Method Name :   initiate_data_ingestion
             Description :   This method initiates the data ingestion components of training pipeline 

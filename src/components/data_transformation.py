@@ -3,8 +3,10 @@ from typing import Union
 import os
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+from collections import namedtuple
 from src.constant import *
 from src.exception import VisibilityException
 from src.logger import logging
@@ -25,111 +27,98 @@ class DataTransformationConfig:
 
 class DataTransformation:
     def __init__(self,
-                 clustered_train_data_path,
-                 clustered_test_data_path):
+                 raw_data_dir):
        
-        self.clustered_train_data_path = clustered_train_data_path
-        self.clustered_test_data_path = clustered_test_data_path
+        self.raw_data_dir = raw_data_dir
+
         self.data_transformation_config = DataTransformationConfig()
 
 
         self.utils =  MainUtils()
         
     
-    def get_train_and_test_dataset(self):
-        
+    def drop_schema_columns(self, dataframe:pd.DataFrame) -> pd.DataFrame:
         """
-            Method Name :   get_train_and_test_dataset
-            Description :   This method reads the clustered train and test datasets from artifacts 
+        Method Name :   drop_schema_columns
+        Description :   This method reads the schema.yml file and drops the column in th dataset based on the schema given. 
+        
+        Output      :   a pd.DataFrame dropping the schema columns
+        On Failure  :   Write an exception log and then raise an exception
+        
+        Version     :   1.2
+        Revisions   :   moved setup to cloud
+        """
+        try:
+            _schema_config = self.utils.read_schema_config_file()
+            df = dataframe.drop(columns =  _schema_config["drop_columns"])
+
+            return df
+        except Exception as e:
+            raise VisibilityException(e,sys)
+
+    @staticmethod
+    def get_merged_batch_data(raw_data_dir:str) -> pd.DataFrame:
+        """
+        Method Name :   get_merged_batch_data
+        Description :   This method reads all the validated raw data from the raw_data_dir and returns a pandas DataFrame containing the merged data. 
+        
+        Output      :   a pandas DataFrame containing the merged data 
+        On Failure  :   Write an exception log and then raise an exception
+        
+        Version     :   1.2
+        Revisions   :   moved setup to cloud
+        """
+        try:
+            raw_files = os.listdir(raw_data_dir)
+            csv_data = []
+            for filename in raw_files:
+                data = pd.read_csv(os.path.join(raw_data_dir, filename))
+                csv_data.append(data)
+
+            merged_data = pd.concat(csv_data)
+
+            return merged_data
+        except Exception as e:
+            raise VisibilityException(e,sys)
+        
+    def apply_outliers_capping(self,dataframe:pd.DataFrame):
+        """
+            Method Name :   apply_outliers_capping
+            Description :   This method reduces the outliers
             
-            Output      :   a dask DataFrame
+            Output      :   a pd.DataFrame
             On Failure  :   Write an exception log and then raise an exception
             
             Version     :   1.2
             Revisions   :   moved setup to cloud
         """
-        
-        try:
-            train_set = pd.read_csv(self.clustered_train_data_path)
-            test_set = pd.read_csv(self.clustered_test_data_path)
 
-            return train_set, test_set
+
+        try:
+
+            outliers_columns = self.utils.read_schema_config_file()['outlier_columns']
+
+            
+            for column in outliers_columns:
+
+                percentile25 = dataframe[column].quantile(0.25)
+                percentile75 = dataframe[column].quantile(0.75)
+                iqr = percentile75 - percentile25
+                upper_limit = percentile75 + 1.5 * iqr
+                lower_limit = percentile25 - 1.5 * iqr
+                dataframe.loc[(dataframe[column]>upper_limit), column]= upper_limit
+                dataframe.loc[(dataframe[column]<lower_limit), column]= lower_limit   
+            
+            
+
+            return dataframe
 
         except Exception as e:
             raise VisibilityException(e,sys)
 
 
 
-    def transform_data(self, train_set:pd.DataFrame, test_set:pd.DataFrame) -> pd.DataFrame:
-        """
-            Method Name :   transform_data
-            Description :   This method applies feature transformation and other feature
-                            engineering operations and returns train and test X datasets. 
-            
-            Output      :   preprocessed X train and X test 
-            On Failure  :   Write an exception log and then raise an exception
-            
-            Version     :   1.2
-            Revisions   :   moved setup to cloud
-        """
-        logging.info(
-            "Entered get_data_transformer_object method of DataTransformation class"
-        )
-
-        try:
-            logging.info("Dropping schema columns")
-            logging.info("Initialized StandardScaler, SimpleImputer")
-
-            
-            
-            
-
-            preprocessor = StandardScaler()
-            
-            X_train = train_set.drop(columns = [TARGET_COLUMN, CLUSTER_LABEL_COLUMN])
-            X_test = test_set.drop(columns = [TARGET_COLUMN,CLUSTER_LABEL_COLUMN])
-
-    
-
-
-            X_train_scaled =  preprocessor.fit_transform(X_train)
-            X_test_scaled  =  preprocessor.transform(X_test)
-
-            X_train_final = pd.DataFrame(
-                X_train_scaled, columns= X_train.columns, index= X_train.index
-            )
-
-            X_test_final = pd.DataFrame(
-            X_test_scaled, columns= X_test.columns, index= X_test.index
-                )
-
-            #merge cluster label columns
-            X_train_final[CLUSTER_LABEL_COLUMN] = train_set[CLUSTER_LABEL_COLUMN]
-            X_test_final[CLUSTER_LABEL_COLUMN] = test_set[CLUSTER_LABEL_COLUMN]
-
-         
-
-
-            #save preprocessor
-            preprocessor_dump_path = self.data_transformation_config.transformed_object_file_path
-            preprocessor_dump_dir = os.path.dirname(preprocessor_dump_path)
-            os.makedirs(preprocessor_dump_dir, exist_ok=True)
-
-
-            self.utils.save_object(preprocessor_dump_path, preprocessor)
-            logging.info("saved preprocessor")
-        
-
-
-            logging.info(
-                "Exited get_data_transformer_object method of DataTransformation class"
-            )
-
-            return X_train_final, X_test_final
-
-        except Exception as e:
-            raise VisibilityException(e, sys) from e
-
+             
     def initiate_data_transformation(self) :
         """
             Method Name :   initiate_data_transformation
@@ -147,20 +136,35 @@ class DataTransformation:
         )
 
         try:
-               
-            train_set, test_set =  self.get_train_and_test_dataset()
+            dataframe = self.get_merged_batch_data(raw_data_dir=self.raw_data_dir)
             
-            X_train,  X_test  = self.transform_data(train_set, test_set)
+            dataframe = self.drop_schema_columns(dataframe=dataframe)
             
-            
-            y_train = train_set[[TARGET_COLUMN]]
-            y_test = test_set[[TARGET_COLUMN]]
+            dataframe = self.apply_outliers_capping(dataframe)
 
-            return (
-                X_train, y_train, X_test, y_test,
-                self.data_transformation_config.transformed_object_file_path
-                
-            )
+            X = dataframe.drop(columns= TARGET_COLUMN)
+            y = dataframe[TARGET_COLUMN]
+            
+            X_train, X_test, y_train, y_test = train_test_split(X,y, test_size = 0.2 )
+
+
+
+            preprocessor = StandardScaler()
+
+            X_train_scaled =  preprocessor.fit_transform(X_train)
+            X_test_scaled  =  preprocessor.transform(X_test)
+
+
+            preprocessor_path = self.data_transformation_config.transformed_object_file_path
+            os.makedirs(os.path.dirname(preprocessor_path), exist_ok= True)
+            self.utils.save_object(preprocessor_path,
+                        obj= preprocessor)
+
+            train_arr = np.c_[X_train_scaled, np.array(y_train) ]
+            test_arr = np.c_[ X_test_scaled, np.array(y_test) ]
+
+            return (train_arr, test_arr, preprocessor_path)
+        
 
         except Exception as e:
             raise VisibilityException(e, sys) from e
