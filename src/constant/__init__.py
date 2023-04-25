@@ -1,2 +1,5 @@
-AWS_S3_BUCKET_NAME = "visibility"
+AWS_S3_BUCKET_NAME = "visibility-bucket"
 MONGO_DATABASE_NAME = "visibility"
+
+TARGET_COLUMN = "VISIBILITY"
+CLUSTER_LABEL_COLUMN = "Cluster"

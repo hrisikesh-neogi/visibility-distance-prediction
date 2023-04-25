@@ -1,26 +1,36 @@
 import sys
 from typing import Union
 import os
-import dask.dataframe as dd
-from dask.dataframe import DataFrame
-from dask_ml.model_selection import train_test_split
-from dask_ml.preprocessing import StandardScaler
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
 
-from src.entity.config_entity import DataTransformationConfig
-from src.entity.artifact_entity import DataTransformationArtifact, DataClusteringArtifact
-from src.constant.training_pipeline import TARGET_COLUMN,CLUSTER_LABEL_COLUMN
+from src.constant import *
 from src.exception import VisibilityException
 from src.logger import logging
 from src.utils.main_utils import MainUtils
+from dataclasses import dataclass
+
+@dataclass
+class DataTransformationConfig:
+    data_transformation_dir=os.path.join('artifacts','data_transformation')
+    transformed_train_file_path=os.path.join(data_transformation_dir, 'train.npy')
+    transformed_test_file_path=os.path.join(data_transformation_dir, 'test.npy') 
+    transformed_object_file_path=os.path.join( data_transformation_dir, 'preprocessing.pkl' )
+
+
+
+
 
 
 class DataTransformation:
     def __init__(self,
-                 data_clustering_artifact: DataClusteringArtifact,
-                 data_tranasformation_config: DataTransformationConfig):
+                 clustered_train_data_path,
+                 clustered_test_data_path):
        
-        self.data_clustering_artifact = data_clustering_artifact
-        self.data_transformation_config = data_tranasformation_config
+        self.clustered_train_data_path = clustered_train_data_path
+        self.clustered_test_data_path = clustered_test_data_path
+        self.data_transformation_config = DataTransformationConfig()
 
 
         self.utils =  MainUtils()
@@ -40,8 +50,8 @@ class DataTransformation:
         """
         
         try:
-            train_set = dd.read_csv(self.data_clustering_artifact.clustered_train_data_dir)
-            test_set = dd.read_csv(self.data_clustering_artifact.clustered_test_data_dir)
+            train_set = pd.read_csv(self.clustered_train_data_path)
+            test_set = pd.read_csv(self.clustered_test_data_path)
 
             return train_set, test_set
 
@@ -50,13 +60,7 @@ class DataTransformation:
 
 
 
-    
-
-                
-   
-
-
-    def transform_data(self, train_set:dd.DataFrame, test_set:dd.DataFrame) -> DataFrame:
+    def transform_data(self, train_set:pd.DataFrame, test_set:pd.DataFrame) -> pd.DataFrame:
         """
             Method Name :   transform_data
             Description :   This method applies feature transformation and other feature
@@ -88,12 +92,20 @@ class DataTransformation:
     
 
 
-            X_train =  preprocessor.fit_transform(X_train)
-            X_test  =  preprocessor.transform(X_test)
+            X_train_scaled =  preprocessor.fit_transform(X_train)
+            X_test_scaled  =  preprocessor.transform(X_test)
+
+            X_train_final = pd.DataFrame(
+                X_train_scaled, columns= X_train.columns, index= X_train.index
+            )
+
+            X_test_final = pd.DataFrame(
+            X_test_scaled, columns= X_test.columns, index= X_test.index
+                )
 
             #merge cluster label columns
-            X_train[CLUSTER_LABEL_COLUMN] = train_set[CLUSTER_LABEL_COLUMN]
-            X_test[CLUSTER_LABEL_COLUMN] = test_set[CLUSTER_LABEL_COLUMN]
+            X_train_final[CLUSTER_LABEL_COLUMN] = train_set[CLUSTER_LABEL_COLUMN]
+            X_test_final[CLUSTER_LABEL_COLUMN] = test_set[CLUSTER_LABEL_COLUMN]
 
          
 
@@ -113,7 +125,7 @@ class DataTransformation:
                 "Exited get_data_transformer_object method of DataTransformation class"
             )
 
-            return X_train, X_test
+            return X_train_final, X_test_final
 
         except Exception as e:
             raise VisibilityException(e, sys) from e
@@ -143,28 +155,12 @@ class DataTransformation:
             
             y_train = train_set[[TARGET_COLUMN]]
             y_test = test_set[[TARGET_COLUMN]]
-        
-            
-            train_set = dd.concat([X_train, y_train], axis=1)
-            test_set = dd.concat([X_test, y_test], axis=1)
 
-            train_set.to_csv(self.data_transformation_config.transformed_train_file_path, index=False,header=True, single_file= True)
-            logging.info("Transformed train set is saved")
-            test_set.to_csv(self.data_transformation_config.transformed_test_file_path, index=False,header=True, single_file= True)
-            logging.info("Transformed test set is saved")
-            
-            data_transformation_artifact = DataTransformationArtifact(
-                transformed_object_file_path=self.data_transformation_config.transformed_object_file_path,
-                transformed_train_file_path=self.data_transformation_config.transformed_train_file_path,
-                transformed_test_file_path= self.data_transformation_config.transformed_test_file_path
+            return (
+                X_train, y_train, X_test, y_test,
+                self.data_transformation_config.transformed_object_file_path
+                
             )
-        
-            logging.info("data transformatiuon is done.")
-            
-            return data_transformation_artifact
-        
-
-
 
         except Exception as e:
             raise VisibilityException(e, sys) from e

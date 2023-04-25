@@ -9,8 +9,8 @@ from kneed import KneeLocator
 import os
 import glob
 
+from src.cloud_storage.aws_syncer import S3Sync
 from src.constant import *
-from src.constant.training_pipeline import TARGET_COLUMN
 from src.utils.main_utils import MainUtils
 from src.exception import VisibilityException
 from src.logger import logging
@@ -18,8 +18,6 @@ from dataclasses import dataclass
 
 
 
-TARGET_COLUMN = "VISIBILITY"
-CLUSTER_LABEL_COLUMN = "Cluster"
 
 
 @dataclass
@@ -29,7 +27,7 @@ class DataClusteringConfig:
     clustering_dir=os.path.join('artifacts','data_clustering')
     clustered_train_data_dir=os.path.join(clustering_dir,'clustered_train.csv')
     clustered_test_data_dir=os.path.join(clustering_dir,'clustered_test.csv')
-    trained_clustering_model_file_path=os.path.join(clustering_dir,'clustering_model.pkl')
+    trained_clustering_model_file_path=os.path.join(clustering_dir,'saved_clustering_model','clustering_model.pkl')
     train_test_split_ratio=0.2
 
 
@@ -42,6 +40,8 @@ class DataClustering:
        
         self.valid_data_dir = valid_data_dir
         self.data_clustering_config = DataClusteringConfig()
+
+        self.s3_sync = S3Sync()
         
 
         self.utils = MainUtils()
@@ -178,28 +178,31 @@ class DataClustering:
             raise VisibilityException(e, sys)
 
  
-    # def push_clustering_model_to_s3(self):
+    def push_clustering_model_to_s3(self):
 
         
-    #     """
-    #         Method Name: push_clustering_model_to_s3
-    #         Description: This methos pushes the local clustering model to s3 bucket. 
+        """
+            Method Name: push_clustering_model_to_s3
+            Description: This methos pushes the local clustering model to s3 bucket. 
 
-    #         Output: NA
-    #         On Failure: Write an exception log and then raise an exception
+            Output: NA
+            On Failure: Write an exception log and then raise an exception
 
-    #         Version: 1.0
-    #         Revisions: None
+            Version: 1.0
+            Revisions: None
 
-    #     """
+        """
 
-    #     try:
-    #         self.clustering_model.save_model(from_file=self.data_clustering_config.trained_clustering_model_file_path)
-    #         logging.info("clustering model is pushed to s3")
+        try:
+            self.s3_sync.sync_folder_to_s3(
+                folder=os.path.dirname(self.data_clustering_config.trained_clustering_model_file_path), aws_buket_name= AWS_S3_BUCKET_NAME
+            )
+
+            logging.info("clustering model is pushed to s3")
 
 
-    #     except Exception as e:
-    #         raise VisibilityException(e,sys)
+        except Exception as e:
+            raise VisibilityException(e,sys)
 
     def apply_outliers_capping(self,dataframe:pd.DataFrame):
         """
@@ -218,7 +221,7 @@ class DataClustering:
 
             outliers_columns = self.utils.read_schema_config_file()['outlier_columns']
 
-            dataframe = dataframe.compute()
+            
             for column in outliers_columns:
 
                 percentile25 = dataframe[column].quantile(0.25)
@@ -230,7 +233,6 @@ class DataClustering:
                 dataframe.loc[(dataframe[column]<lower_limit), column]= lower_limit   
             
             
-            dataframe = pd.from_pandas(dataframe, chunksize=len(dataframe))
 
             return dataframe
 
@@ -271,31 +273,28 @@ class DataClustering:
             Revisions   :   moved setup to cloud
         """
         try:
-            if self.data_validation_artifact.validation_status:
-                dataframe = self.get_merged_batch_data(raw_data_dir=self.data_validation_artifact.valid_raw_files_dir)
-                dataframe = self.drop_schema_columns(dataframe=dataframe)
-                dataframe = self.get_cluster_labeled_datasets(dataframe=dataframe)
-                train_set, test_set = self.split_data_as_train_test_set(dataframe=dataframe)
+            dataframe = self.get_merged_batch_data(raw_data_dir=self.valid_data_dir)
+            dataframe = self.drop_schema_columns(dataframe=dataframe)
+            dataframe = self.get_cluster_labeled_datasets(dataframe=dataframe)
+            train_set, test_set = self.split_data_as_train_test_set(dataframe=dataframe)
 
-                train_set.to_csv(self.data_clustering_config.clustered_train_data_dir ,index=False,header=True, single_file= True)
-                test_set.to_csv(self.data_clustering_config.clustered_test_data_dir,index=False,header=True, single_file= True)
+            train_set.to_csv(self.data_clustering_config.clustered_train_data_dir ,index=False)
+            test_set.to_csv(self.data_clustering_config.clustered_test_data_dir,index=False)
 
 
-                # self.push_clustering_model_to_s3()
+            self.push_clustering_model_to_s3()
 
-               
+            logging.info("clustering is done.")
 
-                # data_clustering_artifact = DataClusteringArtifact(
-                #     clustered_train_data_dir=self.data_clustering_config.clustered_train_data_dir,
-                #     clustered_test_data_dir= self.data_clustering_config.clustered_test_data_dir,
-                #     clustering_model_path=self.data_clustering_config.trained_clustering_model_file_path
-                # )
+
+            return (
+                self.data_clustering_config.clustered_train_data_dir,
+                    self.data_clustering_config.clustered_test_data_dir,
+                self.data_clustering_config.trained_clustering_model_file_path )
+            
                 
-                # logging.info("clustering is done.")
 
-                # return data_clustering_artifact
-            else:
-                raise Exception("data is not validated.")
+                   
         except Exception as e:
             raise VisibilityException(e,sys)
 
