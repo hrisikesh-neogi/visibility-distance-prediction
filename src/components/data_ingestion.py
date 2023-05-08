@@ -5,11 +5,10 @@ import pandas as pd
 from pymongo import MongoClient
 from zipfile import Path
 from src.constant import *
-from src.entity.config_entity import DataIngestionConfig
-from src.entity.artifact_entity import DataIngestionArtifact
-from src.data_access.visibility_data import VisibilityData
 from src.exception import VisibilityException
 from src.logger import logging
+
+from src.data_access.visibility_data import VisibilityData
 from src.utils.main_utils import MainUtils
 from dataclasses import dataclass
 
@@ -18,14 +17,14 @@ from dataclasses import dataclass
 
 @dataclass
 class DataIngestionConfig:
-    data_ingestion_dir: str = os.path.join("artifacts", "data_ingestion")
+    data_ingestion_dir: str = os.path.join(artifact_folder, "data_ingestion")
     
         
 
 class DataIngestion:
-    def __init__(self, data_ingestion_config:DataIngestionConfig = DataIngestionConfig()):
+    def __init__(self):
         
-        self.data_ingestion_config = data_ingestion_config
+        self.data_ingestion_config = DataIngestionConfig()
         self.utils = MainUtils()
 
 

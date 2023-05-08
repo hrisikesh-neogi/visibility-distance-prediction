@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 @dataclass
 class DataTransformationConfig:
-    data_transformation_dir=os.path.join('artifacts','data_transformation')
+    data_transformation_dir=os.path.join(artifact_folder,'data_transformation')
     transformed_train_file_path=os.path.join(data_transformation_dir, 'train.npy')
     transformed_test_file_path=os.path.join(data_transformation_dir, 'test.npy') 
     transformed_object_file_path=os.path.join( data_transformation_dir, 'preprocessing.pkl' )
@@ -27,9 +27,9 @@ class DataTransformationConfig:
 
 class DataTransformation:
     def __init__(self,
-                 raw_data_dir):
+                 valid_data_dir):
        
-        self.raw_data_dir = raw_data_dir
+        self.valid_data_dir = valid_data_dir
 
         self.data_transformation_config = DataTransformationConfig()
 
@@ -57,10 +57,10 @@ class DataTransformation:
             raise VisibilityException(e,sys)
 
     @staticmethod
-    def get_merged_batch_data(raw_data_dir:str) -> pd.DataFrame:
+    def get_merged_batch_data(valid_data_dir:str) -> pd.DataFrame:
         """
         Method Name :   get_merged_batch_data
-        Description :   This method reads all the validated raw data from the raw_data_dir and returns a pandas DataFrame containing the merged data. 
+        Description :   This method reads all the validated raw data from the valid_data_dir and returns a pandas DataFrame containing the merged data. 
         
         Output      :   a pandas DataFrame containing the merged data 
         On Failure  :   Write an exception log and then raise an exception
@@ -69,10 +69,10 @@ class DataTransformation:
         Revisions   :   moved setup to cloud
         """
         try:
-            raw_files = os.listdir(raw_data_dir)
+            raw_files = os.listdir(valid_data_dir)
             csv_data = []
             for filename in raw_files:
-                data = pd.read_csv(os.path.join(raw_data_dir, filename))
+                data = pd.read_csv(os.path.join(valid_data_dir, filename))
                 csv_data.append(data)
 
             merged_data = pd.concat(csv_data)
@@ -136,7 +136,7 @@ class DataTransformation:
         )
 
         try:
-            dataframe = self.get_merged_batch_data(raw_data_dir=self.raw_data_dir)
+            dataframe = self.get_merged_batch_data(valid_data_dir=self.valid_data_dir)
             
             dataframe = self.drop_schema_columns(dataframe=dataframe)
             

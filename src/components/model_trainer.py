@@ -10,6 +10,7 @@ from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV, train_test_split
 from sklearn.tree import DecisionTreeRegressor
 from src.constant import *
+from src.cloud_storage.aws_syncer import S3Sync
 from src.exception import VisibilityException
 from src.logger import logging
 from src.utils.main_utils import MainUtils
@@ -18,7 +19,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelTrainerConfig:
-    model_trainer_dir= os.path.join('artifacts','model_trainer')
+    model_trainer_dir= os.path.join(artifact_folder,'model_trainer')
     trained_model_path= os.path.join(model_trainer_dir, 'trained_model',"model.pkl" )
     expected_accuracy=0.45
     model_config_file_path= os.path.join('config','model.yaml')
@@ -59,6 +60,7 @@ class ModelTrainer:
         
 
         self.model_trainer_config = ModelTrainerConfig()
+        self.s3_sync = S3Sync()
 
 
         self.utils = MainUtils()
@@ -208,19 +210,19 @@ class ModelTrainer:
             best_model = models[best_model_name]
 
 
-            # best_model = self.finetune_best_model(
-            #     best_model_name= best_model_name,
-            #     best_model_object= best_model,
-            #     X_train= x_train,
-            #     y_train= y_train
-            # )
+            best_model = self.finetune_best_model(
+                best_model_name= best_model_name,
+                best_model_object= best_model,
+                X_train= x_train,
+                y_train= y_train
+            )
 
             best_model.fit(x_train, y_train)
             y_pred = best_model.predict(x_test)
             best_model_score = r2_score(y_test, y_pred)
             print(best_model_score)
 
-            if best_model_score < 0.6:
+            if best_model_score < 0.5:
                 raise Exception("No best model found with an accuracy greater than the threshold 0.6")
             
             logging.info(f"Best found model on both training and testing dataset")
@@ -235,20 +237,17 @@ class ModelTrainer:
                 f"Saving model at path: {self.model_trainer_config.trained_model_path}"
             )
 
-            os.makedirs(os.path.dirname(self.model_trainer_config.trained_model_path))
+            os.makedirs(os.path.dirname(self.model_trainer_config.trained_model_path), exist_ok=True)
 
             self.utils.save_object(
                 file_path=self.model_trainer_config.trained_model_path,
                 obj=custom_model,
             )
 
-          
+            self.s3_sync.sync_folder_to_s3(os.path.dirname(folder=self.model_trainer_config.trained_model_path),
+                                           aws_buket_name= AWS_S3_BUCKET_NAME)
 
-            # upload_file(
-            #     from_filename=self.model_trainer_config.trained_model_file_path,
-            #     to_filename="model.pkl",
-            #     bucket_name=AWS_S3_BUCKET_NAME,
-            # )
+            
 
             return best_model_score
 

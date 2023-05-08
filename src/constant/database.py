@@ -1,2 +1,0 @@
-DATABASE_NAME = "visibility"
-COLLECTION_NAME = ""

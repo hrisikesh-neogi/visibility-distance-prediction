@@ -5,6 +5,7 @@ import re
 import os
 import shutil
 
+from src.constant import *
 from src.exception import VisibilityException
 from src.logger import logging
 from src.utils.main_utils import MainUtils
@@ -17,7 +18,7 @@ NUMBER_OF_COLUMNS  = 11
 
 @dataclass
 class DataValidationConfig:
-    data_validation_dir:str =os.path.join('artifacts','data_validation')
+    data_validation_dir:str =os.path.join(artifact_folder,'data_validation')
     valid_data_dir:str =os.path.join(data_validation_dir,'validated')
     invalid_data_dir:str =os.path.join(data_validation_dir,'invalid')
 
@@ -154,7 +155,8 @@ class DataValidation:
 
         try:
             os.makedirs(dest_path, exist_ok=True)
-            shutil.move(src_path, dest_path)
+            if os.path.basename(src_path) not in os.listdir(dest_path):
+                shutil.move(src_path, dest_path)
         except Exception as e:
             raise VisibilityException(e,sys)
 

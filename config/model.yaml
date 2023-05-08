@@ -32,8 +32,6 @@ model_selection:
       Random Forest Regression:
         search_param_grid:
           n_estimators:
-           - 10 
-           - 20
            - 50 
            - 100 
            - 130 
@@ -41,11 +39,7 @@ model_selection:
            - 10
            - 20
            - 30
-           - 40
-           - 50
-          max_features:
-           - 'auto'
-           - 'sqrt'
+           
           min_samples_split:
            - 2
            - 6

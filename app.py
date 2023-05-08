@@ -1,82 +1,42 @@
-from fastapi import FastAPI, Request, File, UploadFile
-import shutil
-import sys
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
-from uvicorn import run as app_run
-from starlette.responses import FileResponse
-
-
-from src.pipeline.train_pipeline import TrainPipeline
-from src.pipeline.prediction_pipeline import PredictionPipeline
+from flask import Flask, render_template, jsonify, request, send_file
 from src.exception import VisibilityException
-from src.logger import logging
-from src.logger import LOG_FILE_PATH, LOG_FILE
-from src.constant.application import *
+from src.logger import logging as lg
+import os,sys
 
-import warnings
-warnings.filterwarnings('ignore')
+from src.pipeline.training_pipeline import TraininingPipeline
+from src.pipeline.prediction_pipeline import PredictionPipeline
 
-app = FastAPI()
+app = Flask(__name__)
 
+@app.route("/")
+def home():
+    return render_template("index.html")
 
-
-
-origins = ["*"]
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-
-
-@app.get("/train")
-async def trainRouteClient():
+@app.route("/train")
+def train_route():
     try:
-        train_pipeline = TrainPipeline()
-
+        train_pipeline = TraininingPipeline()
         train_pipeline.run_pipeline()
-        logging.info("training successfully completed.")
 
-        return Response("Training successful !!")
-
-    except Exception as e:
-        return Response(f"Error Occurred! {e}")
-
-
-        
-@app.post("/predict")
-def predict(file: UploadFile = File(...)):
-    try:
-        pred_pipeline = PredictionPipeline(file)
-        prediction_file = pred_pipeline.run_pipeline()
-        file_location = prediction_file.prediction_file_path
-        file_name = prediction_file.prediction_file_name
-        logging.info("prediction finished")
-        return FileResponse(file_location, media_type='application/octet-stream',filename=file_name)
+        return jsonify("Training Successfull.")
 
     except Exception as e:
         raise VisibilityException(e,sys)
+    
 
-@app.post("/logs")
+@app.route("/predict", methods = ['POST', 'GET'])
 def predict():
     try:
-        return FileResponse(LOG_FILE_PATH, media_type='application/octet-stream',filename=LOG_FILE)
-
+        if request.method == "POST":
+            prediction_pipeline = PredictionPipeline(request=request)
+            predicted_visibility = prediction_pipeline.run_pipeline()
+            print(predicted_visibility)
+            return render_template("result.html", prediction= f"{predicted_visibility[0] :.3f}")
     except Exception as e:
         raise VisibilityException(e,sys)
 
-
-
-
+    
 
 
 if __name__ == "__main__":
-    app_run(app, host = APP_HOST, port =APP_PORT)
-    
+    app.run(host="0.0.0.0", port=8080, debug= True)
