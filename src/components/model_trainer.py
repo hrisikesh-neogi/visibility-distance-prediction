@@ -244,7 +244,7 @@ class ModelTrainer:
                 obj=custom_model,
             )
 
-            self.s3_sync.sync_folder_to_s3(os.path.dirname(folder=self.model_trainer_config.trained_model_path),
+            self.s3_sync.sync_folder_to_s3(folder=os.path.dirname(self.model_trainer_config.trained_model_path),
                                            aws_buket_name= AWS_S3_BUCKET_NAME)
 
             
